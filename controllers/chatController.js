@@ -1,8 +1,10 @@
 // controllers/chatController.js
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Chat from '../models/chat.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const genAI = new GoogleGenerativeAI('AIzaSyB4i1axhlAxUU4fp6_G0Vav3sNMko2P3mU');
+const genAI = new GoogleGenerativeAI(process.env.geminiApi);
 const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 export const postChat = async (req, res) => {
