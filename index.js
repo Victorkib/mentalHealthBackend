@@ -7,6 +7,7 @@ import cors from 'cors';
 import authRoutes from './routes/auth.routes.js';
 import moodRoutes from './routes/mood.routes.js';
 import chartsRoutes from './routes/chat.routes.js';
+import professionalRoutes from './routes/professional.routes.js';
 import './config/passport.js';
 
 const PORT = process.env.PORT || 6500;
@@ -43,3 +44,4 @@ mongoose
 app.use('/api/auth', authRoutes);
 app.use('/api/moods', moodRoutes);
 app.use('/api/chats', chartsRoutes);
+app.use('/api/professional', professionalRoutes);

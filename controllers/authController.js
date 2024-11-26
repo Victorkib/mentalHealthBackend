@@ -45,3 +45,80 @@ export const login = async (req, res) => {
 //   });
 //   res.redirect(`myapp://login?token=${token}`); // Replace with your app's deep link
 // };
+
+//controller to either post or check if there is one
+export const recordLoggedInUser = async (req, res) => {
+  const { id, firstName, lastName, name, email, password, profilePicture } =
+    req.body;
+
+  // Validate input
+  if (!id || !email) {
+    return res
+      .status(400)
+      .json({ message: 'User ID, email, and password are required.' });
+  }
+
+  try {
+    // Check if the user already exists
+    let user = await User.findOne({ userId: id, email });
+
+    if (!user) {
+      // Create a new user (triggers pre-save middleware for hashing password)
+      user = new User({
+        userId: id,
+        firstName: firstName || name || null,
+        lastName,
+        email,
+        password, // Will be hashed by the pre-save middleware
+        profilePicture,
+      });
+
+      await user.save();
+      return res.status(201).json(user); // Respond with 201 Created for new user
+    }
+
+    // If user exists, respond with their details
+    res.status(200).json(user);
+  } catch (error) {
+    console.error('Error recording logged in user:', error);
+    res.status(500).json({
+      message: error.message || 'Error recording logged in user!',
+    });
+  }
+};
+
+export const getUserData = async (req, res) => {
+  const { uid } = req.params;
+  try {
+    const user = await User.findOne({ userId: uid });
+    if (!user) {
+      return res.status(404).json({ message: 'No such user found!' });
+    }
+    user.password = undefined;
+    res.status(200).json(user);
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: error.message || 'Error fetching user data!' });
+  }
+};
+
+export const updateUser = async (req, res) => {
+  const { id } = req.params;
+  try {
+    //update the user
+    const updatedUser = await User.findByIdAndUpdate(id, req.body, {
+      new: true,
+    });
+
+    if (!updateUser) {
+      return res.status(404).json({ message: 'No such user to update!' });
+    }
+    res.status(200).json(updateUser);
+  } catch (error) {
+    console.error('Error recording logged in user:', error);
+    res.status(500).json({
+      message: error.message || 'Error recording logged in user!',
+    });
+  }
+};

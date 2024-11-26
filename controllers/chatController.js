@@ -9,13 +9,13 @@ const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 export const postChat = async (req, res) => {
   try {
-    const userId = req.body.userId || 'default-user';
+    const { user } = req.body || 'default-user';
     const message = req.body.message;
 
     // Find or create a chat document for the user
-    let chat = await Chat.findOne({ userId });
+    let chat = await Chat.findOne({ userId: user.id });
     if (!chat) {
-      chat = new Chat({ userId, messages: [{ conversation: [] }] });
+      chat = new Chat({ userId: user.id, messages: [{ conversation: [] }] });
     }
 
     // Initialize a new chat session if there are no messages
@@ -38,8 +38,8 @@ export const postChat = async (req, res) => {
 
     // Store the user message, AI response, and title in the chat history
     chat.messages[0].conversation.push({
-      user: { text: message, sender: 'user' },
-      ai: { text: aiMessage, sender: 'AI' },
+      user: { text: message, sender: user.firstName },
+      ai: { text: aiMessage, sender: 'SerenityAI' },
       title: conversationTitle,
     });
 
