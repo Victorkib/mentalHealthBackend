@@ -12,7 +12,6 @@ export const createProfessional = async (req, res) => {
       description,
       idFront,
       idBack,
-      status,
     } = req.body;
 
     // Validate the required fields
@@ -38,7 +37,6 @@ export const createProfessional = async (req, res) => {
       description,
       idFront,
       idBack,
-      status,
     });
 
     // Save to the database

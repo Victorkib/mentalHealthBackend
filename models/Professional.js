@@ -36,8 +36,9 @@ const ProfessionalSchema = new mongoose.Schema(
       required: true,
     },
     status: {
-      type: Boolean,
-      default: false, // Default to not verified
+      type: String,
+      enum: ['Pending', 'Approved', 'Rejected'],
+      default: 'Pending',
     },
   },
   {

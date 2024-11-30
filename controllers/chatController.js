@@ -12,19 +12,20 @@ export const postChat = async (req, res) => {
     const { user } = req.body || 'default-user';
     const message = req.body.message;
 
+    if (!user || !message) {
+      return res
+        .status(400)
+        .json({ message: 'User and message are required.' });
+    }
+
     // Find or create a chat document for the user
     let chat = await Chat.findOne({ userId: user.id });
     if (!chat) {
-      chat = new Chat({ userId: user.id, messages: [{ conversation: [] }] });
+      chat = new Chat({ userId: user.id, messages: [] });
     }
 
-    // Initialize a new chat session if there are no messages
-    let chatSession;
-    if (chat.messages.length === 0) {
-      chatSession = await model.startChat(); // Start a new chat session
-    } else {
-      chatSession = await model.startChat(); // Reuse previous session if applicable
-    }
+    // Start a new chat session
+    const chatSession = await model.startChat();
 
     // Send the message to the AI model
     const result = await chatSession.sendMessage(message);
@@ -32,21 +33,31 @@ export const postChat = async (req, res) => {
 
     // Generate a summary title based on the conversation (AI-generated)
     const summaryResult = await chatSession.sendMessage(
-      `Please summarize this conversation in one title.: ${aiMessage}`
+      `Please summarize this conversation in one title: ${aiMessage}`
     );
     const conversationTitle = summaryResult.response.text();
 
-    // Store the user message, AI response, and title in the chat history
-    chat.messages[0].conversation.push({
-      user: { text: message, sender: user.firstName },
-      ai: { text: aiMessage, sender: 'SerenityAI' },
-      title: conversationTitle,
-    });
+    // Create a new conversation object
+    const newConversation = {
+      conversation: [
+        {
+          user: { text: message, sender: user.firstName },
+          ai: { text: aiMessage, sender: 'SerenityAI' },
+          title: conversationTitle,
+        },
+      ],
+    };
+
+    // Add the new conversation object to the messages array
+    chat.messages.push(newConversation);
 
     await chat.save(); // Save the updated chat history
 
+    // Retrieve the last added conversation (it will now include the generated _id)
+    const createdConversation = chat.messages[chat.messages.length - 1];
+
     // Respond with the generated response
-    res.json({ response: aiMessage });
+    res.json({ response: aiMessage, createdConversation });
   } catch (error) {
     console.error('Error in postChat:', error);
     res.status(400).json({ message: error.message || 'Server Error' });
@@ -57,7 +68,7 @@ export const postChat = async (req, res) => {
 export const getAllChats = async (req, res) => {
   try {
     const userId = req.params.userId || 'default-user';
-    const chats = await Chat.find({ userId });
+    const chats = await Chat.find({ userId }).sort({ createdAt: -1 });
 
     if (!chats || chats.length === 0) {
       return res.status(404).json({ error: 'Chat history not found' });
@@ -107,5 +118,112 @@ export const deleteConversation = async (req, res) => {
   } catch (error) {
     console.error('Error deleting conversation:', error);
     return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get specific conversation history
+export const getConvoHistory = async (req, res) => {
+  const { userId, conversationId } = req.params;
+
+  try {
+    // Find the chat for the given userId
+    const chat = await Chat.findOne({ userId: userId });
+    if (!chat) {
+      return res
+        .status(404)
+        .json({ message: 'No conversations found for this user' });
+    }
+
+    // Find the specific conversation by its _id
+    const conversationObject = chat.messages.find(
+      (msg) => msg._id.toString() === conversationId
+    );
+
+    if (!conversationObject) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    return res.status(200).json(conversationObject);
+  } catch (error) {
+    console.error('Error fetching conversation history:', error);
+    return res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+// Add a new conversation to a specific user's chat
+export const addConvoWithRecentHistory = async (req, res) => {
+  try {
+    const { messageId } = req.params; // The _id of the messages array object
+    const { user, message } = req.body;
+
+    // Step 1: Find the chat document for the user
+    let chat = await Chat.findOne({ userId: user.id });
+
+    if (!chat) {
+      return res
+        .status(404)
+        .json({ message: 'No chat history found for this user.' });
+    }
+
+    // Step 2: Locate the correct messages object by _id
+    const targetMessage = chat.messages.find(
+      (msg) => msg._id.toString() === messageId
+    );
+
+    if (!targetMessage) {
+      return res
+        .status(404)
+        .json({ message: 'No message object found with the given ID.' });
+    }
+
+    // Step 3: Extract the last three conversations
+    const lastConversations = targetMessage.conversation.slice(-3);
+
+    const recentConversations = lastConversations.map((convo) => ({
+      user: convo.user.text,
+      ai: convo.ai.text,
+      title: convo.title,
+    }));
+
+    // Step 4: Format the recent conversations for history
+    const historyMessage = `Use the following Recent Conversation History as a reference as you proceed with the user message below: \n${recentConversations
+      .map(
+        (convo, index) =>
+          `\nConversation ${index + 1}:\n- User: ${convo.user}\n- AI: ${
+            convo.ai
+          }\n- Title: ${convo.title}`
+      )
+      .join('\n')}`;
+
+    // Step 5: Send history and new message to AI
+    const chatSession = await model.startChat();
+    const aiResponse = await chatSession.sendMessage(
+      `${historyMessage}\n\nNew User Message: ${message}`
+    );
+
+    const aiMessage = aiResponse.response.text();
+
+    // Step 6: Generate a conversation title
+    const summaryResult = await chatSession.sendMessage(
+      `Please summarize this conversation in one title: ${aiMessage}`
+    );
+    const conversationTitle = summaryResult.response.text();
+
+    // Step 7: Append the new conversation to the conversation array
+    targetMessage.conversation.push({
+      user: { text: message, sender: user.firstName || 'Anonymous' },
+      ai: { text: aiMessage, sender: 'SerenityAI' },
+      title: conversationTitle,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await chat.save(); // Save the updated chat document
+
+    // Step 8: Return the AI response and recent history
+    res.json({ response: aiMessage, recentHistory: recentConversations });
+  } catch (error) {
+    console.error('Error in addConvoWithRecentHistory:', error);
+    res.status(500).json({ message: error.message || 'Server Error' });
   }
 };
