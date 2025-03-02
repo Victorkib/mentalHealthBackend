@@ -3,8 +3,7 @@ import mongoose from 'mongoose';
 const ProfessionalSchema = new mongoose.Schema(
   {
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User', // Assuming you have a User model
+      type: String,
       required: true,
     },
     firstName: {
